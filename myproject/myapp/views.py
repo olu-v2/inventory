@@ -16,7 +16,6 @@ def list_tables(request):
 def create_table(request):
     if request.method != "POST":
      return JsonResponse({"error": "Method not allowed"}, status=405)
-    print(request.body)
     try:
         body = json.loads(request.body)
         table_name = body.get("table_name")

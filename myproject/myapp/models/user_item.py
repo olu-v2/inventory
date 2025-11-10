@@ -3,53 +3,49 @@ from datetime import datetime
 from ..services.dynamodb_service import DynamoDBService
 
 @dataclass
-class InventoryItem:
+class UserItem:
  id: str
- name: str
- quantity: int
- tag: str
- image: str
+ first_name: str
+ last_name: str
+ staff_id: str
+ password: str
+ role: str
  created_at: str = datetime.utcnow().isoformat()
  updated_at: str = datetime.utcnow().isoformat()
- 
- TABLE_NAME = "InventoryItems"
+
+
+ TABLE_NAME = "UserItems"
 
  def to_dict(self):
   return {
    "id": self.id,
-   "name": self.name,
-   "quantity": self.quantity,
-   "tag": self.tag,
-   "image": self.image,
-   "created_at": self.created_at,
-   "updated_at": self.updated_at,
+   "first_name": self.first_name,
+   "last_name": self.last_name,
+   "staff_id": self.staff_id,
+  "password": self.password,
+  "role": self.role,
+  "created_at": self.created_at,
+  "updated_at": self.updated_at
   }
 
  def save(self):
-  """ Save to DynamoDB """
   db = DynamoDBService()
   table = db.get_table(table_name = self.TABLE_NAME)
   table.put_item(Item=self.to_dict())
   return self
  
  @classmethod
- def get(cls, item_id: str):
-  """ Rettrieve item by ID """
+ def get(cls, staff_id: str):
+  """ Rettrieve item by Staff ID """
   db = DynamoDBService()
   table = db.get_table(table_name = cls.TABLE_NAME)
-  response = table.get_item(Key={"id": item_id})
+  response = table.get_item(Key={"staff_id": staff_id})
   item_data = response.get("Item")
   return cls(**item_data) if item_data else None
  
  @classmethod
- def delete(cls, item_id: str):
-   response = cls.dynamo.table.delete_item(Key={"id": item_id})
-   return response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200
-
- 
- @classmethod
  def all(cls):
-  """ Return all inventory """
+  """ Return all Users """
   db = DynamoDBService()
   table = db.get_table(table_name = cls.TABLE_NAME)
   response = table.scan()

@@ -1,8 +1,5 @@
-from django.http import JsonResponse, HttpResponse
-from services.dynamodb_service import DynamoDBService
-from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
 import uuid
-import json
 from datetime import datetime
 from schemas.inventory import CreateItemRequest, CreateItemResponse
 from models.inventory_item import InventoryItem
