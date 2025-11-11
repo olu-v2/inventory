@@ -77,42 +77,71 @@ def checkout(request, item_id):
 
     try:
         data = json.loads(request.body)
-        quantity_to_deduct = data.get("quantity")
-
-        if quantity_to_deduct is None or quantity_to_deduct <= 0:
-            return JsonResponse({"error": "Invalid quantity"}, status=400)
-
-        try:
-            item = InventoryItem.get(item_id=item_id)
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
+        if not isinstance(data, list) or len(data) == 0:
+            return JsonResponse({"error": "Expected a non-empty list of items"}, status=400)
         
-        if item.quantity < quantity_to_deduct:
-            return JsonResponse({"error": "Not enough stock"}, status=400)
-
-        item.quantity -= quantity_to_deduct
-        item.save()
-
-        LOW_STOCK_THRESHOLD = 5
-        if item.quantity <= LOW_STOCK_THRESHOLD:
-            lambda_client = boto3.client(
+        lambda_client = boto3.client(
                 "lambda",
                 region_name=os.getenv("AWS_REGION", "us-east-1"),
                 profile_name=os.getenv("AWS_PROFILE")
             )
+        LOW_STOCK_THRESHOLD = 5
+        results = []
 
-            payload = {
+        for entry in data:
+            item_id = entry.get("item_id")
+            quantity_to_deduct = entry.get("quantity")
+            if not item_id or quantity_to_deduct is None or quantity_to_deduct <= 0:
+                results.append({
+                    "item_id" : item_id,
+                    "status": "failed",
+                    "error": "Invalid item_id or quantity"
+                })
+                continue
+
+            try:
+                item = InventoryItem.get(item_id=item_id)
+            except Exception as e:
+                results.append({
+                    "item_id": item_id,
+                    "status": "failed",
+                    "error": f"Item not found: {str(e)}"
+                })
+                continue
+        
+            if item.quantity < quantity_to_deduct:
+                results.append({
+                    "item_id": item_id,
+                    "name": item.name,
+                    "status": "failed",
+                    "error": "Not enough stock"
+                })
+                continue
+
+            item.quantity -= quantity_to_deduct
+            item.save()
+
+            if item.quantity <= LOW_STOCK_THRESHOLD:
+                
+
+                payload = {
+                    "item_id": item.id,
+                    "item_name": item.name,
+                    "quantity": item.quantity,
+                    "message": f"Low stock alert for {item.name}: {item.quantity} left."
+                }
+
+                lambda_client.invoke(
+                    FunctionName="low_stock_alert_handler",
+                    InvocationType="Event",  # async
+                    Payload=json.dumps(payload)
+                )
+            results.append({
                 "item_id": item.id,
-                "item_name": item.name,
-                "quantity": item.quantity,
-                "message": f"Low stock alert for {item.name}: {item.quantity} left."
-            }
-
-            lambda_client.invoke(
-                FunctionName="low_stock_alert_handler",
-                InvocationType="Event",  # async
-                Payload=json.dumps(payload)
-            )
+                "name": item.name,
+                "remaining_quantity": item.quantity,
+                "status": "success"
+            })
 
         return JsonResponse({
             "message": "Checkout successful",
