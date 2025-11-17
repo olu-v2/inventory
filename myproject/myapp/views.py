@@ -1,6 +1,7 @@
 from django.http import JsonResponse, HttpResponse
 from .services.dynamodb_service import DynamoDBService
 from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render
 import json
 from datetime import datetime
 
@@ -10,7 +11,7 @@ def index(request):
 def list_tables(request):
     dynamo = DynamoDBService()
     tables = dynamo.list_tables()
-    return JsonResponse({"tables": tables})
+    return render(request, "myapp/tables.html", {"tables": tables})
 
 @csrf_exempt
 def create_table(request):
