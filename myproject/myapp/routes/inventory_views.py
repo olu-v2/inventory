@@ -1,8 +1,10 @@
 from django.http import JsonResponse
+from django.shortcuts import render, redirect
 import uuid
 from datetime import datetime
-from schemas.inventory import CreateItemRequest, CreateItemResponse
-from models.inventory_item import InventoryItem
+from myapp.schemas.inventory import CreateItemRequest, CreateItemResponse
+from myapp.models.inventory_item import InventoryItem
+from myapp.services.s3_service import S3Service
 import json
 import boto3
 import os
@@ -11,28 +13,49 @@ def list_or_add_items(request):
     """ This calls the all method defined in the models/inventory_item method file to get all the items in stock """
     if request.method == "GET":
         items = InventoryItem.all()
-        return JsonResponse(items, safe=False)
+        return render(request, "myapp/items.html", {"items": items})
     elif request.method == "POST":
-        # Use the validated data from the middleware
-        data = request.validated_data._raw
-        item = InventoryItem(
-            id=str(uuid.uuid4()),
-            name=data["name"],
-            quantity=data["quantity"],
-            tag=data["tag"],
-            created_at=datetime.utcnow().isoformat(),
-            updated_at=datetime.utcnow().isoformat(),
-        )
-        item.save()
-        response_data = CreateItemResponse(
-            id = item.id,
-            name = item.name,
-            quantity = item.quantity,
-            tag = item.tag,
-            created_at = item.created_at,
-            updated_at = item.updated_at
-        ).to_dict()
-        return JsonResponse(response_data, status=201)
+        try:
+            post_data = {
+                "name": request.POST.get("name"),
+                "quantity": int(request.POST.get("quantity", 0)),
+                "tag": request.POST.get("tag"),
+                "image_url": "",
+            }
+
+            # Upload image to S3 (if provided)
+            image_file = request.FILES.get("image")
+            if not image_file:
+                return JsonResponse({"error": "Image is required"}, status=400)
+
+            s3 = S3Service()
+            image_url = s3.upload_image(image_file, bucket_name="inventory171125")
+            print("url: ", image_url)
+            post_data["image_url"] = image_url
+
+            print(post_data["image_url"])
+
+            # Validate request data using schema
+            validated_request = CreateItemRequest(**post_data)
+
+            item = InventoryItem(
+                id=str(uuid.uuid4()),
+                name=validated_request._raw["name"],
+                quantity=validated_request._raw["quantity"],
+                tag=validated_request._raw["tag"],
+                image_url=validated_request._raw["image_url"],
+                created_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.utcnow().isoformat(),
+            )
+            item.save()
+            items = InventoryItem.all()
+            return render(request, "myapp/items.html", {"items": items})
+
+        except ValueError as ve:
+            # schema validation errors
+            return JsonResponse({"error": str(ve)}, status=400)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
 
 def item_detail(request, item_id):
     """Handles GET, PATCH, and DELETE operations for a specific inventory item."""
@@ -42,7 +65,7 @@ def item_detail(request, item_id):
             return  JsonResponse({"error": "Item not found"}, status=404)
         return JsonResponse(item.to_dict(), status=200)
     elif request.method == "PATCH":
-        data = getattr(request, "validated_data", None)
+        data = getattr(request, "validated_data", None) or request.patch
         if not data:
             return JsonResponse({"error": "Missing or invalid data"}, status=400)
         item = InventoryItem.get(item_id)
@@ -188,7 +211,9 @@ def restock(request, item_id):
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
-    
+
+def create_item(request):
+    return render(request, "myapp/add_item.html")
 
 list_or_add_items.request_schema = CreateItemRequest
 list_or_add_items.response_schema = CreateItemResponse

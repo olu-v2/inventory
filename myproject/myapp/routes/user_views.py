@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 from datetime import datetime
-from models.user_item import UserItem
+from myapp.models.user_item import UserItem
 import json
 
 def login(request):

@@ -8,7 +8,7 @@ class InventoryItem:
  name: str
  quantity: int
  tag: str
- image: str
+ image_url: str
  created_at: str = datetime.utcnow().isoformat()
  updated_at: str = datetime.utcnow().isoformat()
  
@@ -20,7 +20,7 @@ class InventoryItem:
    "name": self.name,
    "quantity": self.quantity,
    "tag": self.tag,
-   "image": self.image,
+   "image_url": self.image_url,
    "created_at": self.created_at,
    "updated_at": self.updated_at,
   }

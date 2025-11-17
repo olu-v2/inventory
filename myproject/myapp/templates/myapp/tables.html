@@ -1,0 +1,7 @@
+{% extends "myapp/base.html" %} {% block content %}
+<ul>
+  {% for table in tables %}
+  <li>{{ table }}</li>
+  {% endfor %}
+</ul>
+{% endblock %}

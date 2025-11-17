@@ -16,8 +16,25 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from myapp import views
+from myapp.routes import inventory_views, user_views
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path ('inventory/', include('myapp.urls'))
+path('admin/', admin.site.urls),
+path('', views.index, name='index'),
+path('items/', inventory_views.list_or_add_items, name="items"),
+path('create-item/', inventory_views.create_item, name='create_item'),
+path("items/<str:item_id>/",inventory_views.item_detail, name="item_detail"),
+path("items/checkout/", inventory_views.checkout, name="checkout"),
+path("items/<str:item_id>/restock/", inventory_views.restock, name="restock"),
+path("tables/", views.list_tables, name="list_tables"),
+path("table/", views.create_table, name="create_table"),
+path("login/", user_views.login, name="login"),
+
+# API Endpoints
+path('api/items/', inventory_views.list_or_add_items, name="api_items"),
+path("api/items/<str:item_id>/",inventory_views.item_detail, name="api_item_detail"),
+path("api/items/checkout/", inventory_views.checkout, name="api_checkout"),
+path("api/items/<str:item_id>/restock/", inventory_views.restock, name="api_restock"),
+path("api/login/", user_views.login, name="api_login"),
 ]

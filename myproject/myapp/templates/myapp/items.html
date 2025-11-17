@@ -1,0 +1,38 @@
+{% extends "myapp/base.html" %} {% load static %} {% block content %}
+<h2>Inventory Items</h2>
+
+{% if error %}
+<p style="color: red">{{ error }}</p>
+{% endif %}
+
+<form method="POST" enctype="multipart/form-data">
+  {% csrf_token %}
+  <label>Name:</label>
+  <input type="text" name="name" required /><br />
+
+  <label>Quantity:</label>
+  <input type="number" name="quantity" required /><br />
+
+  <label>Tag:</label>
+  <input type="text" name="tag" required /><br />
+
+  <label>Image:</label>
+  <input type="file" name="image" required /><br /><br />
+
+  <button type="submit">Add Item</button>
+</form>
+
+<hr />
+
+<ul>
+  {% for item in items %}
+  <li>
+    <img src="{{ item.image_url }}" width="80" alt="{{ item.name }}" />
+    {{ item.name }} ({{ item.quantity }}) - {{ item.tag }}
+  </li>
+  {% empty %}
+  <li>No items found.</li>
+  {% endfor %}
+</ul>
+
+{% endblock %}
