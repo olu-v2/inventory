@@ -43,8 +43,10 @@ class InventoryItem:
  
  @classmethod
  def delete(cls, item_id: str):
-   response = cls.dynamo.table.delete_item(Key={"id": item_id})
-   return response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200
+  db = DynamoDBService()
+  table = db.get_table(table_name=cls.TABLE_NAME)
+  response = table.delete_item(Key={"id": item_id})
+  return response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200
 
  
  @classmethod

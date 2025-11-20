@@ -1,20 +1,17 @@
-from datetime import datetime
-from .base import BaseSchema
+from schema_val_pkg.base import BaseSchema
+from schema_val_pkg.fields import Field
 
 class CreateItemRequest(BaseSchema):
- def validate(self, data: dict):
-  if "name" not in data or not isinstance(data["name"], str):
-   raise ValueError("Field 'name' is required and must be a string.")
-  if "quantity" not in data or not isinstance(data["quantity"], int):
-   raise ValueError("Field 'quantity' is required and must be an integer.")
-  if "image_url" not in data or not isinstance(data["image_url"], str):
-   raise ValueError("An image is required.")
-  if "tag" not in data or not isinstance(data["tag"], str):
-   raise ValueError("Field 'tag' is required anf must be a string")
-  
+   name = Field(str)
+   quantity = Field(int)
+   image_url = Field(str)
+   tag = Field(str)
+
 class CreateItemResponse(BaseSchema):
- def validate(self, data: dict):
-  required = ["id", "name", "quantity", "image_url", "tag", "created_at", "updated_at"]
-  for field in required:
-   if field not in data:
-    raise ValueError(f"Missing required field '{field}'")
+   id = Field(str)
+   name = Field(str)
+   quantity = Field(int)
+   image_url = Field(str)
+   tag = Field(str)
+   created_at = Field(str)
+   updated_at = Field(str)
