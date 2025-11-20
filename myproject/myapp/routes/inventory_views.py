@@ -10,11 +10,30 @@ import boto3
 import os
 
 def list_or_add_items(request):
-    """ This calls the all method defined in the models/inventory_item method file to get all the items in stock """
+    """Handle listing items, creating items, and deleting items."""
+    
+    # DELETE (simulated via POST)
+
+    if request.method == "POST" and request.POST.get("_method") == "DELETE":
+        item_id = request.POST.get("item_id")
+        item_tag = request.POST.get("item_tag")
+        if not item_id or not item_tag:
+            return JsonResponse({"error": "Item ID and Tag required"}, status=400)
+
+        deleted = InventoryItem.delete(item_id)
+        if deleted:
+            items = InventoryItem.all()
+            return render(request, "myapp/items.html", {"items": items})
+        else:
+            return JsonResponse({"error": "Delete failed"}, status=500)
+
+    # GET (list all items)
     if request.method == "GET":
         items = InventoryItem.all()
         return render(request, "myapp/items.html", {"items": items})
-    elif request.method == "POST":
+
+    # POST (create item)
+    if request.method == "POST":
         try:
             post_data = {
                 "name": request.POST.get("name"),
@@ -23,21 +42,27 @@ def list_or_add_items(request):
                 "image_url": "",
             }
 
-            # Upload image to S3 (if provided)
+            print("Post data created")
+
+            # S3 Upload
             image_file = request.FILES.get("image")
             if not image_file:
                 return JsonResponse({"error": "Image is required"}, status=400)
 
             s3 = S3Service()
-            image_url = s3.upload_image(image_file, bucket_name="inventory171125")
-            print("url: ", image_url)
+
+            print("Uploading image")
+            image_url = s3.upload_image(
+                image_file, 
+                bucket_name="inventory171125"
+            )
+
             post_data["image_url"] = image_url
 
-            print(post_data["image_url"])
-
-            # Validate request data using schema
+            # Schema validation
             validated_request = CreateItemRequest(**post_data)
 
+            # Save to DynamoDB
             item = InventoryItem(
                 id=str(uuid.uuid4()),
                 name=validated_request._raw["name"],
@@ -48,11 +73,12 @@ def list_or_add_items(request):
                 updated_at=datetime.utcnow().isoformat(),
             )
             item.save()
+
+            # Reload page with updated item list
             items = InventoryItem.all()
             return render(request, "myapp/items.html", {"items": items})
 
         except ValueError as ve:
-            # schema validation errors
             return JsonResponse({"error": str(ve)}, status=400)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
@@ -89,7 +115,7 @@ def item_detail(request, item_id):
             return JsonResponse({"status": "deleted"}, status=204)
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
-def checkout(request, item_id):
+def checkout(request):
     """ 
         This is a checkout function that is going to run when an inventory item is taken out of stock.
         And when the stock quantity is below 5, a lambda function is triggered that publishes a message to an sns topic.
@@ -103,19 +129,17 @@ def checkout(request, item_id):
         if not isinstance(data, list) or len(data) == 0:
             return JsonResponse({"error": "Expected a non-empty list of items"}, status=400)
         
-        lambda_client = boto3.client(
-                "lambda",
-                region_name=os.getenv("AWS_REGION", "us-east-1"),
-                profile_name=os.getenv("AWS_PROFILE")
-            )
+        session = boto3.Session(profile_name=os.getenv("AWS_PROFILE"))
+        lambda_client = session.client("lambda", region_name=os.getenv("AWS_REGION", "us-east-1"))
         LOW_STOCK_THRESHOLD = 5
         results = []
+        errors = []
 
         for entry in data:
             item_id = entry.get("item_id")
             quantity_to_deduct = entry.get("quantity")
             if not item_id or quantity_to_deduct is None or quantity_to_deduct <= 0:
-                results.append({
+                errors.append({
                     "item_id" : item_id,
                     "status": "failed",
                     "error": "Invalid item_id or quantity"
@@ -125,7 +149,7 @@ def checkout(request, item_id):
             try:
                 item = InventoryItem.get(item_id=item_id)
             except Exception as e:
-                results.append({
+                errors.append({
                     "item_id": item_id,
                     "status": "failed",
                     "error": f"Item not found: {str(e)}"
@@ -133,7 +157,7 @@ def checkout(request, item_id):
                 continue
         
             if item.quantity < quantity_to_deduct:
-                results.append({
+                errors.append({
                     "item_id": item_id,
                     "name": item.name,
                     "status": "failed",
@@ -150,8 +174,8 @@ def checkout(request, item_id):
                 payload = {
                     "item_id": item.id,
                     "item_name": item.name,
-                    "quantity": item.quantity,
-                    "message": f"Low stock alert for {item.name}: {item.quantity} left."
+                    "quantity": int(item.quantity),
+                    "message": f"Low stock alert for {item.name}: {int(item.quantity)} left."
                 }
 
                 lambda_client.invoke(
@@ -166,14 +190,20 @@ def checkout(request, item_id):
                 "status": "success"
             })
 
-        return JsonResponse({
-            "message": "Checkout successful",
-            "item": {
-                "id": item.id,
-                "name": item.name,
-                "remaining_quantity": item.quantity
-            }
-        })
+        if len(errors) != 0:
+            return JsonResponse({
+                "message" : "Some items could not be checked out",
+                "issues": errors
+            })
+        else:
+            return JsonResponse({
+                "message": "Checkout successful",
+                "item": {
+                    "id": item.id,
+                    "name": item.name,
+                    "remaining_quantity": item.quantity
+                }
+            })
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
